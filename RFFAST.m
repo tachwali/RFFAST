@@ -25,9 +25,9 @@ function Xout = RFFAST(x)
         x = x';
         N = n;
     end    
-    if( rem(N,60) > 0 )
-        error('Current implementation supports input variable with length that is a multiple of 60');
-    end
+    %if( rem(N,60) > 0 )
+    %    error('Current implementation supports input variable with length that is a multiple of 60');
+    %end
         
     % TODO: temporary resizing of input signal to fit the assumption    
     Xout = zeros(N,1);    
@@ -88,7 +88,6 @@ end
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%
 % samplingStage
 % returns xs[ numOfBranches x numOfbins ]
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -127,7 +126,8 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function factors = findDownSamplingFactors(N,NumberforStages)
 %TODO : find factors based on N and number of stages(if necessary)
-    factors = [3,4,5];
+    %factors = [3,4,5];
+    factors = [49,50,51];
 end
 
 function [isSingleton, vp, p] = SingletonEstimator(Y, C, N, Nsamp, start_indeces)
@@ -172,10 +172,10 @@ function [isSingleton, vp, p] = SingletonEstimator(Y, C, N, Nsamp, start_indeces
     % Calculate a(q) vectors....for specific bin
     [aq] = steering_vector(q,start_indeces, N, Nsamp);    
     % Calculate amplitude of basis functions
-    vq = (conj(aq)*Y)/D;  %*' get rid of grey!
+    vq = (aq'*Y)/D;  %*' get rid of grey!
     % Take the norm
-    %%X = Y - vq*aq';
-    %%if ( (norm(X))^2 < T)
+    %X = Y - vq*aq;
+    %if ( (norm(X))^2 < T)
     X=abs(Y);
     if ( (norm(X-mean(X)))^2 < T)
     	isSingleton = true;
@@ -192,7 +192,7 @@ function XS_peeled = Peel(XS,vp,p,a)
     for s = 1 : numOfStage                
         for b = 1 : numOfBins
             if(~isempty(XS{s,b}))
-                XS{s,b} = XS{s,b} - vp*a';
+                XS{s,b} = XS{s,b} - vp*a;
             end
         end
     end    
@@ -200,9 +200,8 @@ function XS_peeled = Peel(XS,vp,p,a)
 end
 
 
-function [aq] = steering_vector(q,start_indeces, clusterSize, NSamp)
-    
-    v = zeros(1,length(start_indeces)*clusterSize);
+function [aq] = steering_vector(q,start_indeces, clusterSize, NSamp)    
+    v = zeros(length(start_indeces)*clusterSize,1);
     k=0;
     for i = 1 : length(start_indeces)           
         for j = 0 : (clusterSize-1)            
