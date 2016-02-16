@@ -10,6 +10,8 @@
 % 
 %%**********************************************************************%
 % Revision:
+% Rev 0.2 rbd 02-15-16          Fixed bugs in peeling and removed the use
+%                               of heuristic songleton detection method
 % Rev 0.1 rbd 12-12-15          Initial draft (assumed downsampling for three stages 3, 4 , 5)
 % Rev 0.2                       Corrected versioning and added input check
 %**********************************************************************%
@@ -22,17 +24,13 @@ function Xout = RFFAST(x)
         error('input variable is not a vector');    
     end    
     if( m < n )
-        x = x';
+        x = reshape(x,n,m);
         N = n;
     end    
-    %if( rem(N,60) > 0 )
-    %    error('Current implementation supports input variable with length that is a multiple of 60');
-    %end
         
-    % TODO: temporary resizing of input signal to fit the assumption    
     Xout = zeros(N,1);    
-    ITERATIONS = 10;
-    T = 0.0001; %threshold
+    ITERATIONS = 100;
+    T = 100; %threshold
     NUMOFSTAGES = 3;
     NUMOFCLUSTERS = 3;
     CLUSTERSIZE = 5;
@@ -108,7 +106,7 @@ function [xs, startIndeces]=samplingStage(  x, ...
         for j = 0 : (clusterSize-1)
             % even if start_index is larger than x size, circshift does the
             % right thing
-            x_circularShifted = circshift(x,start_index); 
+            x_circularShifted = circshift(x,-start_index); 
             xs(k,:)=x_circularShifted(1:downSamplingFactor:end);
             
             %update indeces
@@ -143,12 +141,9 @@ function [isSingleton, vp, p] = SingletonEstimator(Y, C, N, Nsamp, start_indeces
     % We will assume that we have generated phase vectors??
         wnew = 0;
         for t = (N*i)+1 : (N*(i+1)-2)+1 % Because of silly matlab :(
-           	wnew = wnew + Beta(t-N*i)*angle(Y(t+1)/Y(t)) ;
+           	wnew = wnew + Beta(t-N*i)*angle(Y(t+1)*Y(t)');
         end
         
-        if(wnew<0)
-            wnew = 2*pi + wnew;
-        end
         wnew = (1/(2^i))*wnew;
         delta_1 = ceil(wprev/((2*pi)/(2^i)))*((2*pi)/(2^i)) + wnew - wprev;
         delta_2 = floor(wprev/((2*pi)/(2^i)))*((2*pi)/(2^i)) + wnew - wprev;        
@@ -162,9 +157,9 @@ function [isSingleton, vp, p] = SingletonEstimator(Y, C, N, Nsamp, start_indeces
 	
 	% Set support estimate for q
     % TODO: I got the result correct with 4pi not 2pi
-	q = round(wprev*Nsamp/(2*pi)); % add abs value ??
+	q = abs(round(wprev*Nsamp/(2*pi))); % add abs value ??
     
-    q = q+ 1; % ??? for zero
+    q = q + 1; % vector indexing start at one in Matlab
 	
 	%Set the energy threshold
 	T = ( 1 + gamma)*D;
@@ -172,12 +167,14 @@ function [isSingleton, vp, p] = SingletonEstimator(Y, C, N, Nsamp, start_indeces
     % Calculate a(q) vectors....for specific bin
     [aq] = steering_vector(q,start_indeces, N, Nsamp);    
     % Calculate amplitude of basis functions
-    vq = (aq'*Y)/D;  %*' get rid of grey!
+    % ideally, vq should be real not complex, 
+    % and aq should be similar to Y at different scale
+    vq = (aq'*Y)/D;  
     % Take the norm
-    %X = Y - vq*aq;
-    %if ( (norm(X))^2 < T)
-    X=abs(Y);
-    if ( (norm(X-mean(X)))^2 < T)
+    %X=abs(Y);
+    %if ( (norm(X-mean(X)))^2 < T)
+    X = Y - vq*aq;    
+    if ( (norm(X))^2 < T)
     	isSingleton = true;
     	p = q;
     	vp = vq;
@@ -188,10 +185,11 @@ function [isSingleton, vp, p] = SingletonEstimator(Y, C, N, Nsamp, start_indeces
 end
 
 function XS_peeled = Peel(XS,vp,p,a)
-    [numOfStage, numOfBins] = size(XS);        
-    for s = 1 : numOfStage                
+    [numOfStage, ] = size(XS);        
+    for s = 1 : numOfStage 
+        numOfBins = length([XS{s,:}]);
         for b = 1 : numOfBins
-            if(~isempty(XS{s,b}))
+            if(b == (mod(p,numOfBins)))
                 XS{s,b} = XS{s,b} - vp*a;
             end
         end
@@ -210,5 +208,5 @@ function [aq] = steering_vector(q,start_indeces, clusterSize, NSamp)
         end
     end
 
-    aq = exp(2*pi*sqrt(-1)*q.*v/NSamp);       
+    aq = exp(2*pi*sqrt(-1)*(q-1).*v/NSamp);       
 end
